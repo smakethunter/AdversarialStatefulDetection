@@ -79,18 +79,19 @@ def build_encoder(encoded_dimension):
     model = Sequential([
 
         Conv2D(filters=32, kernel_size=3, strides=2, padding='same', activation='relu'),
-        BatchNormalization(),
+
         Conv2D(filters=64, kernel_size=3, strides=2, padding='same', activation='relu'),
-        BatchNormalization(),
+
         Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation='relu'),
-        BatchNormalization(),
+
         Conv2D(filters=256, kernel_size=3, strides=2, padding='same', activation='relu'),
-        BatchNormalization(),
+
         Conv2D(filters=256, kernel_size=3, strides=1, padding='same', activation='relu'),
-        BatchNormalization(),
+
         Flatten(),
         Dense(encoded_dimension, activation='relu')
     ])
+
     return model
 
 
@@ -98,28 +99,20 @@ def build_decoder():
     model = Sequential([
         Dense(16 * 16 * 256, activation='relu'),
         Reshape((16, 16, 256)),
-
         Conv2DTranspose(filters=256, kernel_size=3, strides=1, padding='valid'),
         ReLU(),
-        BatchNormalization(),
         Conv2DTranspose(filters=256, kernel_size=3, strides=1, padding='valid'),
         ReLU(),
-        BatchNormalization(),
         Conv2DTranspose(filters=128, kernel_size=3, strides=1, padding='valid'),
         ReLU(),
-        BatchNormalization(),
         Conv2DTranspose(filters=128, kernel_size=3, strides=1, padding='valid'),
         ReLU(),
-        BatchNormalization(),
         Conv2DTranspose(filters=64, kernel_size=3, strides=1, padding='valid'),
         ReLU(),
-        BatchNormalization(),
         Conv2DTranspose(filters=64, kernel_size=3, strides=1, padding='valid'),
         ReLU(),
-        BatchNormalization(),
         Conv2DTranspose(filters=32, kernel_size=3, strides=1, padding='valid'),
         ReLU(),
-        BatchNormalization(),
         Conv2DTranspose(filters=3, kernel_size=3, strides=1, padding='valid'),
         Activation('sigmoid')
     ])

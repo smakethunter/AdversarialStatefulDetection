@@ -1,27 +1,18 @@
 import numpy as np
-from skimage.util import random_noise
+#from skimage.util import random_noise
+from scipy.linalg import norm
 
 def normal_noise(x):
-    return random_noise(x, mode='gaussian', clip=True)
+    noise = np.random.normal(0,10,x.shape)/255.
+    noisy = norm(x + noise)
+    return np.clip(noisy,0,1)
 
 
-def s_and_p_noise(x):
-    return random_noise(x, mode='s&p', clip=True)
 
 
-def poisson_noise(image):
-    noisy = random_noise(image, mode="poisson", clip=True)
-    return noisy
+def poisson_noise(x):
+    noise = np.random.poisson(1/2, x.shape) / .255
+    return np.clip(x + noise, 0,1)
 
 
-def apply_noise(image: np.array, noise: str):
-    if noise == 'poisson':
-        return poisson_noise(image)
-    elif noise == 's_p':
-        return s_and_p_noise(image)
-    elif noise == 'normal':
-        return normal_noise(image)
 
-
-def apply_random_noise(image):
-    return apply_noise(image, np.random.choice(['poisson', 's_p' 'normal']))
