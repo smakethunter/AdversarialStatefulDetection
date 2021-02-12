@@ -1,7 +1,5 @@
 import numpy as np
-import cv2
 from skimage.util import random_noise
-from scipy.fft import dctn, idctn
 
 def normal_noise(x):
     return random_noise(x, mode='gaussian', clip=True)

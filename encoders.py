@@ -47,7 +47,7 @@ class UNetModel(tf.keras.Model):
         if self.dense_layer:
             x = self.dense_edncoder(x)
         return x
-    @tf.function
+
     def call(self, x):
         conv_block1 = self.conv1(x)
         conv_block2 = self.conv2(conv_block1)
