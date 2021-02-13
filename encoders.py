@@ -1,8 +1,27 @@
+from abc import abstractmethod
+
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import LeakyReLU,Conv2D, BatchNormalization, Flatten, InputLayer, concatenate, ReLU
 from tensorflow.keras.layers import Conv2DTranspose,Input,Dense,Reshape, Activation, Flatten, Concatenate
 from tensorflow.keras.models import Sequential
+
+class Encoder(tf.keras.Model):
+    def __init__(self, name = 'Encoder'):
+        super().__init__()
+        self._name = name
+
+    @abstractmethod
+    def encode(self,x):
+        pass
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
 
 
 def conv_block(filters, kernel_size=3, strides=2, padding='same'):
@@ -19,9 +38,9 @@ def deconv_block(filters, kernel_size=3, strides=2, padding='same'):
     return x
 
 
-class UNetModel(tf.keras.Model):
-    def __init__(self, filters, encoded_features, dense_layer=False):
-        super().__init__()
+class UNetModel(Encoder):
+    def __init__(self, filters, encoded_features, dense_layer=False, name='UNetEncoder'):
+        super().__init__(name=name)
         self.dense_layer = dense_layer
         self.conv1 = conv_block(filters, kernel_size=3, strides=2, padding='same')
         self.conv2 = conv_block(2 * filters, kernel_size=3, strides=2, padding='same')
@@ -36,6 +55,7 @@ class UNetModel(tf.keras.Model):
         self.dense_edncoder = Dense(encoded_features, activation='relu')
         self.dense_decoder = Dense(4 * 256, activation='relu')
         self.reshape = Reshape((2, 2, 256))
+
 
     def encode(self, x):
         x = self.conv1(x)
@@ -119,12 +139,15 @@ def build_decoder():
     return model
 
 
-class SimpleDAE(tf.keras.Model):
-    def __init__(self, encoded_dimension):
-        super().__init__()
+class SimpleDAE(Encoder):
+    def __init__(self, encoded_dimension, name = 'SimpleDAE'):
+        super().__init__(name=name)
 
         self.encoder = build_encoder(encoded_dimension)
         self.decoder = build_decoder()
+
+    def encode(self,x):
+        return self.encoder(x)
 
     @tf.function
     def call(self, x):

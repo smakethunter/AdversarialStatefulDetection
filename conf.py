@@ -1,2 +1,3 @@
-import tensorflow as tf
-print(tf.config.list_physical_devices())
+import numpy as np
+arr = [np.random.normal(0,1,(4,)) for i in range(10)]
+print(np.stack(arr, axis=1))
