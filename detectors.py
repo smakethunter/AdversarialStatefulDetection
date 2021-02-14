@@ -1,9 +1,5 @@
 #TODO:
-# Affinity Propagation
-# Agglomerative Clustering
-# BIRCH
 # DBSCAN
-# K-Means
 # Mini-Batch K-Means
 # Mean Shift
 # OPTICS
@@ -15,9 +11,8 @@ import tensorflow as tf
 from scipy.spatial.distance import euclidean
 from encoders import *
 from scipy.spatial.distance import euclidean
-from sklearn.cluster import AgglomerativeClustering, AffinityPropagation, Birch,DBSCAN, MiniBatchKMeans,KMeans
-
-
+from sklearn.cluster import AgglomerativeClustering, AffinityPropagation, Birch,DBSCAN, MiniBatchKMeans, KMeans,MeanShift, SpectralClustering
+import matplotlib.pyplot as plt
 class AdversarialClassifier:
     def __init__(self, K, threshold, max_memory_size):
         self.K = K
@@ -63,6 +58,18 @@ class AdversarialClassifier:
             self.memory.extend(self.buffer)
             self.buffer = []
 
+    @staticmethod
+    def order_neighbors(x, neighbors):
+        x_distances = [euclidean(x, neighbors[i, :]) for i in range(neighbors.shape[0])]
+        euc_dist_index = np.argsort(x_distances)
+        return neighbors[euc_dist_index, :], x_distances
+
+    def cluster_polling(self, predictions, x_distances):
+        if len(predictions[1:][predictions[1:] == predictions[0]]) >= self.threshold*len(predictions[1:]):
+            return True, np.mean(np.sort(x_distances)[:self.K])
+        else:
+            return False, None
+
 
 class Detector:
     def __init__(self, encoder: Encoder, classifier: AdversarialClassifier):
@@ -98,50 +105,98 @@ class KMeansClassifier(AdversarialClassifier):
 
     def is_attack(self, x, neighbors):
 
-        x_distances = [euclidean(x, neighbors[i, :]) for i in range(neighbors.shape[0])]
-        euc_dist_index = np.argsort(x_distances)
-        neighbors_sorted_by_distance = neighbors[euc_dist_index,:]
+        neighbors_sorted_by_distance, x_distances = self.order_neighbors(x, neighbors)
         x_mean_distance = np.mean(np.sort(x_distances)[:self.K])
         neighbors_mean = self.get_mean_distances(neighbors_sorted_by_distance)
         return x_mean_distance <= neighbors_mean, x_mean_distance
 
 
-class AgglomerateClassifier(AdversarialClassifier):
+class AgglomerateClassifier(AdversarialClassifier, AgglomerativeClustering):
 
-    def __init__(self, k, threshold=None, max_memory_size=1000):
-        super().__init__(k, threshold, max_memory_size)
-        self.model = AgglomerativeClustering(n_clusters=2, linkage='average')
-
-    def is_attack(self, x, neighbors):
-        x_distances = [euclidean(x, neighbors[i, :]) for i in range(neighbors.shape[0])]
-        euc_dist_index = np.argsort(x_distances)
-        neighbors_sorted_by_distance = neighbors[euc_dist_index,:]
-        predictions = self.model.fit_predict(np.stack((x, neighbors_sorted_by_distance), axis=0))[:self.K+1]
-        if len(predictions[1:][predictions[1:] == predictions[0]]) >= self.threshold*len(predictions[1:]):
-            return True, np.mean(x_distances)
-
-        return False
-
-
-class BIRCHClassifier(AdversarialClassifier):
-
-    def __init__(self, k, threshold=None, max_memory_size=1000):
-        super().__init__(k, threshold, max_memory_size)
-        self.model = Birch(threshold=self.threshold, n_clusters=2, compute_labels=True)
+    def __init__(self, k, threshold=None, max_memory_size=1000, *args, **kwargs):
+        AdversarialClassifier.__init__(self, k, threshold, max_memory_size)
+        AgglomerativeClustering.__init__(self, *args, **kwargs)
 
     def is_attack(self, x, neighbors):
-        x_distances = [euclidean(x, neighbors[i, :]) for i in range(neighbors.shape[0])]
-        euc_dist_index = np.argsort(x_distances)
-        neighbors_sorted_by_distance = neighbors[euc_dist_index,:]
+        neighbors_sorted_by_distance, x_distances = self.order_neighbors(x, neighbors)
+        predictions = self.fit_predict(np.concatenate((x, neighbors_sorted_by_distance), axis=0))
+        is_similar, mean = self.cluster_polling(predictions, x_distances)
+        if is_similar:
+            return is_similar, mean
+
+        return False, None
+
+
+class BIRCHClassifier(AdversarialClassifier, Birch):
+
+    def __init__(self, k, threshold=None, max_memory_size=1000, *args, **kwargs):
+        AdversarialClassifier.__init__(self,k, threshold, max_memory_size)
+        Birch.__init__(self, *args, **kwargs)
+
+    def is_attack(self, x, neighbors):
+        neighbors_sorted_by_distance, x_distances = self.order_neighbors(x, neighbors)
         if self.nr_samples > self.K+1:
-            self.model.partial_fit_(np.concatenate((x, neighbors_sorted_by_distance), axis=0))
-            predictions = self.model.predict(np.concatenate((x, neighbors_sorted_by_distance), axis=0))[:self.K+1]
+            self.partial_fit_(np.concatenate((x, neighbors_sorted_by_distance), axis=0))
+            predictions = self.predict(np.concatenate((x, neighbors_sorted_by_distance), axis=0))
         else:
-            predictions = self.model.fit_predict(np.concatenate((x, neighbors_sorted_by_distance), axis=0))[:self.K+1]
+            predictions = self.fit_predict(np.concatenate((x, neighbors_sorted_by_distance), axis=0))
 
-        if len(predictions[1:][predictions[1:] == predictions[0]]) >= len(predictions[1:]):
-            return True, np.mean(x_distances)
+        is_similar, mean = self.cluster_polling(predictions, x_distances)
+        if is_similar:
+            return is_similar, mean
+        return False, None
 
-        return False
+
+class MeanShiftClassifier(AdversarialClassifier, MeanShift):
+
+    def __init__(self, k, threshold=None, max_memory_size=1000, *args, **kwargs):
+        AdversarialClassifier.__init__(k, threshold, max_memory_size)
+        MeanShift.__init__(self, *args, **kwargs)
+
+    def is_attack(self, x, neighbors):
+        neighbors_sorted_by_distance, x_distances = self.order_neighbors(x, neighbors)
+        predictions = self.fit_predict(np.concatenate((x, neighbors_sorted_by_distance), axis=0))
+        is_similar, mean = self.cluster_polling(predictions, x_distances)
+        if is_similar:
+            return is_similar, mean
+
+        return False, None
 
 
+class DBSCANClassifier(AdversarialClassifier, DBSCAN):
+
+    def __init__(self, k, threshold=None, max_memory_size=1000, *args,**kwargs):
+        AdversarialClassifier.__init__(self,k, threshold, max_memory_size)
+        DBSCAN.__init__(self, *args, **kwargs)
+
+    def is_attack(self, x, neighbors):
+        neighbors_sorted_by_distance, x_distances = self.order_neighbors(x, neighbors)
+        predictions = self.fit_predict(np.concatenate((x, neighbors_sorted_by_distance), axis=0))
+        is_similar, mean = self.cluster_polling(predictions, x_distances)
+        if is_similar:
+            return is_similar,mean
+        return False, None
+
+
+class SpectralClusteringClassifier(AdversarialClassifier, SpectralClustering):
+
+    def __init__(self, k, threshold, max_memory_size=1000, *args, **kwargs):
+        AdversarialClassifier.__init__(self, k, threshold, max_memory_size)
+        SpectralClustering.__init__(self, *args, **kwargs)
+
+    def is_attack(self, x, neighbors):
+        x_distances = [euclidean(x, neighbors[i, :]) for i in range(neighbors.shape[0])]
+        euc_dist_index = np.argsort(x_distances)
+        neighbors_sorted_by_distance = neighbors[euc_dist_index, :]
+
+        predictions = self.fit_predict(np.concatenate((x, neighbors_sorted_by_distance), axis=0))
+        labels = np.unique(predictions)
+        for l in labels:
+            args = np.where(predictions[1:] == l)
+            plt.scatter(neighbors_sorted_by_distance[args, 0], neighbors_sorted_by_distance[args, 1])
+        plt.scatter(x[:, 0], x[:, 1])
+        plt.show()
+        is_similar, mean = self.cluster_polling(predictions, x_distances)
+        if is_similar:
+            return is_similar, mean
+        return False, None
