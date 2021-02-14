@@ -17,6 +17,7 @@ from encoders import *
 from scipy.spatial.distance import euclidean
 from sklearn.cluster import AgglomerativeClustering, AffinityPropagation, Birch,DBSCAN, MiniBatchKMeans,KMeans
 
+
 class AdversarialClassifier:
     def __init__(self, K, threshold, max_memory_size):
         self.K = K
@@ -48,7 +49,7 @@ class AdversarialClassifier:
             self.nr_samples += 1
             all_queries.extend(self.buffer)
             all_queries.extend(self.memory)
-            is_attack, avg = self.is_attack(query, np.stack(all_queries, axis=1))
+            is_attack, avg = self.is_attack(query, np.stack(all_queries, axis=0))
             if is_attack:
                 self.detected.append(avg)
                 self.history.append(self.nr_samples)
@@ -70,50 +71,77 @@ class Detector:
         self.memory = []
         self.adversarial_samples = []
         pass
+        self.encoder = encoder
+        self.classifier = classifier
 
-    @abstractmethod
-    def process_query(self):
+    def encode(self, x) -> np.array:
+        return self.encoder.encode(x)
+
+    def check_query(self, query: np.array) -> bool:
+        x = self.encode(query)
+        return self.classifier.process_query(x)
         pass
 
 
-class K_Means_Classifier(AdversarialClassifier):
+class KMeansClassifier(AdversarialClassifier):
     def __init__(self, K, threshold, max_memory_size):
         super().__init__(K, threshold, max_memory_size)
 
     def get_mean_distances(self, part):
         means = []
-        for i in range(part.shape[1]):
+        for i in range(part.shape[0]):
             mean = []
-            for v in np.concatenate((part[:, :i], part[:, i + 1:]), axis=1).T:
-                mean.append(euclidean(part[:, i], v))
+            for v in np.concatenate((part[:i, :], part[i + 1:,:]), axis=0):
+                mean.append(euclidean(part[i, :], v))
             means.append(np.mean(mean))
         return np.percentile(means,self.threshold*100)
 
     def is_attack(self, x, neighbors):
 
-        x_distances = [euclidean(x, neighbors[:, i]) for i in range(neighbors.shape[1])]
+        x_distances = [euclidean(x, neighbors[i, :]) for i in range(neighbors.shape[0])]
         euc_dist_index = np.argsort(x_distances)
-        neighbors_sorted_by_distance = neighbors[:, euc_dist_index][:self.K]
-        neighbors_mean = self.get_mean_distances(neighbors_sorted_by_distance)
+        neighbors_sorted_by_distance = neighbors[euc_dist_index,:]
         x_mean_distance = np.mean(np.sort(x_distances)[:self.K])
+        neighbors_mean = self.get_mean_distances(neighbors_sorted_by_distance)
         return x_mean_distance <= neighbors_mean, x_mean_distance
+
 
 class AgglomerateClassifier(AdversarialClassifier):
 
     def __init__(self, k, threshold=None, max_memory_size=1000):
         super().__init__(k, threshold, max_memory_size)
-        self.model = AgglomerativeClustering(n_clusters=2, compute_distances=True)
+        self.model = AgglomerativeClustering(n_clusters=2, linkage='average')
 
     def is_attack(self, x, neighbors):
-        x_distances = [euclidean(x, neighbors[:, i]) for i in range(neighbors.shape[1])]
+        x_distances = [euclidean(x, neighbors[i, :]) for i in range(neighbors.shape[0])]
         euc_dist_index = np.argsort(x_distances)
-        neighbors_sorted_by_distance = neighbors[:, euc_dist_index]
-        predictions = self.model.fit_predict(np.concatenate((x, neighbors_sorted_by_distance), axis=1))[:self.K+1]
+        neighbors_sorted_by_distance = neighbors[euc_dist_index,:]
+        predictions = self.model.fit_predict(np.stack((x, neighbors_sorted_by_distance), axis=0))[:self.K+1]
         if len(predictions[1:][predictions[1:] == predictions[0]]) >= self.threshold*len(predictions[1:]):
             return True, np.mean(x_distances)
 
         return False
 
 
+class BIRCHClassifier(AdversarialClassifier):
+
+    def __init__(self, k, threshold=None, max_memory_size=1000):
+        super().__init__(k, threshold, max_memory_size)
+        self.model = Birch(threshold=self.threshold, n_clusters=2, compute_labels=True)
+
+    def is_attack(self, x, neighbors):
+        x_distances = [euclidean(x, neighbors[i, :]) for i in range(neighbors.shape[0])]
+        euc_dist_index = np.argsort(x_distances)
+        neighbors_sorted_by_distance = neighbors[euc_dist_index,:]
+        if self.nr_samples > self.K+1:
+            self.model.partial_fit_(np.concatenate((x, neighbors_sorted_by_distance), axis=0))
+            predictions = self.model.predict(np.concatenate((x, neighbors_sorted_by_distance), axis=0))[:self.K+1]
+        else:
+            predictions = self.model.fit_predict(np.concatenate((x, neighbors_sorted_by_distance), axis=0))[:self.K+1]
+
+        if len(predictions[1:][predictions[1:] == predictions[0]]) >= len(predictions[1:]):
+            return True, np.mean(x_distances)
+
+        return False
 
 
