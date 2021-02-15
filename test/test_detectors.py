@@ -7,7 +7,7 @@ class MyTestCase(unittest.TestCase):
         samples2 = np.random.normal(2, 10, (2, 200))
         samples = np.concatenate((samples1, samples2), axis=1)
         new_sample = np.random.normal(25, 1, (2, 1))
-        SClustering = AgglomerateClassifier(k=50, threshold=1, n_clusters=2, linkage='average')
+        SClustering = BIRCHClassifier(k=50, threshold=1, n_clusters=2)
         print(SClustering.is_attack(new_sample.T, samples.T))
 
 

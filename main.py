@@ -1,18 +1,11 @@
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from noises import *
-
-
-from tensorflow.python.framework.ops import disable_eager_execution
-disable_eager_execution()
-
+# Import mlcompute module to use the optional set_mlc_device API for device selection with ML Compute.
 from tensorflow.python.compiler.mlcompute import mlcompute
-mlcompute.set_mlc_device(device_name='any')
 
-
-
-
-
+# Select CPU device.
+mlcompute.set_mlc_device(device_name='cpu') # Available options are 'cpu', 'gpu', and ‘any'.
 batch_size = 128
 from tensorflow.keras.datasets import cifar100, cifar10
 
@@ -56,10 +49,11 @@ model.compile(
 )
 
 history = model.fit(
-    train_data_noisy[:100],train_data_clean[:100],
+    train_data_noisy[:4000],train_data_clean[:4000],
 
     epochs=12,
-    validation_split=0.2
+    validation_split=0.2,
+
 )
 plt.plot(history.history['loss'])
 plt.show()
