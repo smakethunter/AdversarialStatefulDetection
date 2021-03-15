@@ -23,25 +23,7 @@ for i in range(test_data_clean.shape[0]):
 
 from encoders import *
 model = SimpleDAE(256)
-# tf.keras.models.Sequential([
-#   tf.keras.layers.Conv2D(32, kernel_size=(3, 3),
-#                  activation='relu'),
-#   tf.keras.layers.Conv2D(64, kernel_size=(3, 3),
-#                  activation='relu'),
-# #   tf.keras.layers.Dropout(0.25),
-#   tf.keras.layers.Flatten(),
-#   tf.keras.layers.Dense(128, activation='relu'),
-#   tf.keras.layers.Reshape((8,8,2)),
-# #   tf.keras.layers.Dropout(0.5),
-#   tf.keras.layers.Conv2DTranspose(64, kernel_size=(3, 3), strides=2,
-#                  activation='relu', padding='same'),
-#   tf.keras.layers.Conv2DTranspose(32, kernel_size=(3, 3), strides=2,
-#                  activation='relu', padding='same'),
-#   tf.keras.layers.Conv2DTranspose(3, kernel_size=(3, 3),
-#                  activation='relu',padding='same'),
-#
-#
-# ])
+
 model.compile(
     loss='mse',
     optimizer='adam',
